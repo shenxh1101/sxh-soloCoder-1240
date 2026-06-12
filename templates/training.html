@@ -3,113 +3,113 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>训练模拟区 - 验证码识别平台</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>训练模拟区</title>
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <div class="container admin-container">
+    <div class="container">
         <header class="admin-header">
-            <div class="header-left">
-                <h1>🎯 训练模拟区</h1>
-                <p class="subtitle">智能难度建议、批量标注练习、准确率趋势分析</p>
-            </div>
+            <h1>🎯 训练模拟区</h1>
             <div class="header-links">
-                <a href="{{ url_for('index') }}" class="back-link">← 返回主页</a>
-                <a href="{{ url_for('admin_panel') }}" class="back-link">📊 管理面板</a>
-                <a href="{{ url_for('samples_page') }}" class="back-link">📚 样本库</a>
+                <a href="/">🏠 主页</a>
+                <a href="/admin">📊 管理面板</a>
+                <a href="/samples">📚 样本库</a>
+                <a href="/training" class="active">🎯 训练模拟</a>
+                <a href="/quality">📈 质量看板</a>
             </div>
         </header>
 
-        <div class="suggestion-card" id="suggestion-card">
-            <div class="suggestion-loading">加载训练建议中...</div>
-        </div>
+        <div class="suggestion-card" id="suggestionCard"></div>
 
-        <div class="stats-grid">
+        <div class="stats-row">
             <div class="stat-card">
-                <div class="stat-icon">📝</div>
-                <div class="stat-info">
-                    <div class="stat-value" id="total-submissions">0</div>
-                    <div class="stat-label">总提交次数</div>
-                </div>
+                <div class="stat-label">总提交数</div>
+                <div class="stat-value" id="totalSubmissions">-</div>
             </div>
-            <div class="stat-card primary">
-                <div class="stat-icon">🎯</div>
-                <div class="stat-info">
-                    <div class="stat-value"><span id="accuracy">0</span>%</div>
-                    <div class="stat-label">整体准确率</div>
-                </div>
+            <div class="stat-card bg-success">
+                <div class="stat-label">整体准确率</div>
+                <div class="stat-value" id="overallAccuracy">-</div>
             </div>
-            <div class="stat-card success">
-                <div class="stat-icon">🏷️</div>
-                <div class="stat-info">
-                    <div class="stat-value" id="total-annotations">0</div>
-                    <div class="stat-label">已标注样本</div>
-                </div>
+            <div class="stat-card bg-info">
+                <div class="stat-label">已标注数</div>
+                <div class="stat-value" id="totalAnnotations">-</div>
             </div>
-            <div class="stat-card info">
-                <div class="stat-icon">✅</div>
-                <div class="stat-info">
-                    <div class="stat-value"><span id="annotation-accuracy">0</span>%</div>
-                    <div class="stat-label">标注准确率</div>
-                </div>
+            <div class="stat-card bg-primary">
+                <div class="stat-label">标注准确率</div>
+                <div class="stat-value" id="annotationAccuracy">-</div>
+            </div>
+            <div class="stat-card bg-warning">
+                <div class="stat-label">训练批次数</div>
+                <div class="stat-value" id="batchCount">-</div>
             </div>
         </div>
 
-        <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('annotation-workspace')">标注练习</button>
-            <button class="tab-btn" onclick="switchTab('accuracy-trend')">准确率趋势</button>
-            <button class="tab-btn" onclick="switchTab('annotation-history')">标注历史</button>
+        <div class="tabs" style="margin:20px 0 10px">
+            <button class="tab-btn active" data-tab="workspace">标注工作区</button>
+            <button class="tab-btn" data-tab="history">批次报告历史</button>
+            <button class="tab-btn" data-tab="trend">准确率趋势</button>
         </div>
 
-        <div id="annotation-workspace" class="tab-content active">
-            <div class="admin-actions">
-                <div class="difficulty-control">
-                    <label>难度：</label>
-                    <select id="training-difficulty" onchange="refreshSamples()">
-                        <option value="auto">自动推荐</option>
-                        <option value="normal">普通模式</option>
-                        <option value="hard">困难模式</option>
-                    </select>
+        <div id="tab-workspace" class="tab-content active">
+            <div class="section">
+                <h2 style="margin-top:0">📝 当前批次标注</h2>
+                <div class="filter-bar" style="margin:10px 0">
+                    <div class="filter-group">
+                        <span>难度：</span>
+                        <select id="difficultySelect">
+                            <option value="auto">自动（AI推荐）</option>
+                            <option value="normal">普通</option>
+                            <option value="hard">困难</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <span>样本数量：</span>
+                        <select id="sampleCountSelect">
+                            <option value="4">4 张</option>
+                            <option value="6" selected>6 张</option>
+                            <option value="9">9 张</option>
+                            <option value="12">12 张</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" onclick="loadTrainingSamples()">🎲 新批次样本</button>
+                    <span class="badge badge-info" id="currentDifficultyBadge">难度: -</span>
                 </div>
-                <div class="mutation-control">
-                    <label>样本数：</label>
-                    <select id="sample-count" onchange="refreshSamples()">
-                        <option value="4">4个</option>
-                        <option value="6" selected>6个</option>
-                        <option value="9">9个</option>
-                        <option value="12">12个</option>
-                    </select>
+                <div id="samplesContainer" class="annotation-grid">
+                    <div class="annotation-history-card" style="text-align:center;grid-column:1/-1">
+                        <p class="muted">点击上方"新批次样本"开始</p>
+                    </div>
                 </div>
-                <button class="btn btn-primary" onclick="refreshSamples()">🔄 换一批</button>
-                <button class="btn btn-success" onclick="submitAllAnnotations()">📝 提交全部标注</button>
+                <div style="margin:20px 0;text-align:center">
+                    <button class="btn btn-success btn-lg" id="submitAllBtn" onclick="submitAllAnnotations()" disabled style="font-size:16px;padding:12px 36px">
+                        📊 提交并生成本批次报告
+                    </button>
+                </div>
             </div>
-            <div id="samples-container" class="annotation-grid">
-                <p class="empty-text">正在加载样本...</p>
+
+            <div id="batchReport" style="display:none;margin-top:20px">
+                <h2>📋 最近批次报告</h2>
+                <div id="batchReportContent" class="training-batch-card"></div>
             </div>
         </div>
 
-        <div id="accuracy-trend" class="tab-content">
-            <div class="trend-section">
-                <h3>📈 识别准确率变化趋势</h3>
-                <div id="trend-chart" class="trend-chart">
-                    <p class="empty-text">暂无足够数据展示趋势（需要至少5条记录）</p>
-                </div>
+        <div id="tab-history" class="tab-content">
+            <div id="batchHistory" class="annotation-history-card">
+                <p class="muted" style="text-align:center;padding:20px">暂无历史批次。完成一次标注后点击"提交并生成本批次报告"</p>
             </div>
         </div>
 
-        <div id="annotation-history" class="tab-content">
-            <div class="table-container">
-                <table class="data-table">
+        <div id="tab-trend" class="tab-content">
+            <div class="trend-chart-container">
+                <h3 style="margin-top:0">📈 整体准确率趋势（分段统计）</h3>
+                <div id="trendBars" class="trend-bars"></div>
+            </div>
+            <div id="annotationHistory" class="section" style="margin-top:20px">
+                <h2 style="margin-top:0">📜 标注历史（最近 100 条）</h2>
+                <table class="admin-table">
                     <thead>
-                        <tr>
-                            <th>时间</th>
-                            <th>验证码</th>
-                            <th>标注结果</th>
-                            <th>是否正确</th>
-                            <th>来源</th>
-                        </tr>
+                        <tr><th>时间</th><th>验证码</th><th>标注</th><th>结果</th><th>来源</th></tr>
                     </thead>
-                    <tbody id="annotation-body">
+                    <tbody id="annotationTableBody">
                     </tbody>
                 </table>
             </div>
@@ -117,340 +117,328 @@
     </div>
 
     <script>
-        let currentTab = 'annotation-workspace';
-        let currentSamples = [];
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = String(text);
+        return div.innerHTML;
+    }
 
-        function escapeHtml(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
+    let currentSamples = [];
+    let currentAnnotations = [];
 
-        function switchTab(tabName) {
-            currentTab = tabName;
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-            event.target.classList.add('active');
-            document.getElementById(tabName).classList.add('active');
-            
-            if (tabName === 'accuracy-trend') {
-                renderTrend();
-            } else if (tabName === 'annotation-history') {
-                loadAnnotationHistory();
-            }
-        }
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            const tabId = btn.getAttribute('data-tab');
+            document.getElementById('tab-' + tabId).classList.add('active');
+            if (tabId === 'history') loadBatchHistory();
+            if (tabId === 'trend') { loadTrendData(); loadAnnotationHistory(); }
+        });
+    });
 
-        function hexToBase64(hexStr) {
-            const bytes = new Uint8Array(hexStr.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-            let binary = '';
-            bytes.forEach(b => binary += String.fromCharCode(b));
-            return btoa(binary);
-        }
-
-        function showToast(message, type = 'success') {
-            const toast = document.createElement('div');
-            toast.className = `toast toast-${type}`;
-            toast.textContent = message;
-            document.body.appendChild(toast);
-            setTimeout(() => toast.classList.add('show'), 10);
-            setTimeout(() => {
-                toast.classList.remove('show');
-                setTimeout(() => toast.remove(), 300);
-            }, 2500);
-        }
-
-        async function loadSuggestion() {
-            try {
-                const response = await fetch('/api/training/suggestion');
-                const data = await response.json();
-                const s = data.suggestion;
-
-                const diffLabels = { 'normal': '普通模式', 'hard': '困难模式' };
-                const card = document.getElementById('suggestion-card');
-                
-                card.innerHTML = `
-                    <div class="suggestion-header">
-                        <div class="suggestion-icon">🤖</div>
-                        <div class="suggestion-title">AI 训练建议</div>
-                    </div>
-                    <div class="suggestion-body">
-                        <div class="suggestion-main">
-                            <span class="suggestion-label">推荐难度：</span>
-                            <span class="suggestion-diff">${diffLabels[s.recommended_difficulty] || s.recommended_difficulty}</span>
-                        </div>
-                        <div class="suggestion-reason">📊 ${escapeHtml(s.reason)}</div>
-                        <div class="suggestion-metrics">
-                            <span class="metric">当前准确率：<strong>${s.accuracy}%</strong></span>
-                            <span class="metric">样本总量：<strong>${s.total_submissions}</strong></span>
-                        </div>
-                        <div class="suggestion-steps">
-                            <div class="steps-title">📝 下一步建议：</div>
-                            <ul>
-                                ${s.next_steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}
-                            </ul>
-                        </div>
-                    </div>
-                `;
-            } catch (error) {
-                console.error('加载建议失败:', error);
-            }
-        }
-
-        async function refreshSamples() {
-            const difficulty = document.getElementById('training-difficulty').value;
-            const count = parseInt(document.getElementById('sample-count').value) || 6;
-
-            try {
-                const response = await fetch(`/api/training/samples?count=${count}&difficulty=${difficulty}`);
-                const data = await response.json();
-                
-                if (!data.success) {
-                    showToast(data.message || '加载失败', 'error');
-                    return;
-                }
-
-                currentSamples = data.samples;
-                renderAnnotationSamples();
-            } catch (error) {
-                console.error('加载样本失败:', error);
-                showToast('加载样本失败', 'error');
-            }
-        }
-
-        function renderAnnotationSamples() {
-            const container = document.getElementById('samples-container');
-            
-            if (currentSamples.length === 0) {
-                container.innerHTML = '<p class="empty-text">暂无样本，点击"换一批"获取新样本</p>';
-                return;
-            }
-
-            container.innerHTML = currentSamples.map(s => `
-                <div class="annotation-card" data-id="${escapeHtml(s.id)}" data-text="${escapeHtml(s.captcha_text)}">
-                    <div class="annotation-img-wrap">
-                        <img src="data:image/png;base64,${hexToBase64(s.image_data)}" alt="captcha">
-                    </div>
-                    <div class="annotation-input-wrap">
-                        <input type="text" 
-                               class="annotation-input" 
-                               placeholder="输入识别结果"
-                               data-id="${escapeHtml(s.id)}"
-                               maxlength="8"
-                               autocomplete="off">
-                    </div>
-                    <div class="annotation-status" id="status-${escapeHtml(s.id)}"></div>
-                </div>
-            `).join('');
-
-            document.querySelectorAll('.annotation-input').forEach(input => {
-                input.addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter') {
-                        const id = this.getAttribute('data-id');
-                        submitSingleAnnotation(id, this);
-                    }
-                });
+    function loadSuggestion() {
+        fetch('/api/training/suggestion')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) renderSuggestion(data.suggestion);
             });
+        fetch('/api/stats')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('totalSubmissions').textContent = data.summary.total_submissions;
+                document.getElementById('overallAccuracy').textContent = data.summary.accuracy + '%';
+                document.getElementById('totalAnnotations').textContent = data.summary.total_annotations;
+                document.getElementById('annotationAccuracy').textContent = data.summary.annotation_accuracy + '%';
+                document.getElementById('batchCount').textContent = data.summary.training_batches_count;
+            });
+    }
+
+    function renderSuggestion(s) {
+        const diffLabel = s.recommended_difficulty === 'normal' ? '普通模式 (推荐)' : '困难模式 (推荐)';
+        const diffCls = s.recommended_difficulty === 'normal' ? 'badge-info' : 'badge-warning';
+        const card = document.getElementById('suggestionCard');
+        card.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:15px">
+                <div>
+                    <h3 style="margin:0 0 8px 0">🤖 AI 训练建议</h3>
+                    <div style="font-size:15px;margin-bottom:10px">${escapeHtml(s.reason)}</div>
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+                        <span class="badge ${diffCls}" style="font-size:14px;padding:6px 12px">🎯 ${diffLabel}</span>
+                        <span class="badge badge-success" style="font-size:13px">📊 历史准确率 ${s.accuracy}%</span>
+                        <span class="badge badge-info" style="font-size:13px">📝 总提交 ${s.total_submissions} 条</span>
+                    </div>
+                </div>
+                <div style="min-width:260px;background:rgba(255,255,255,0.6);padding:12px 16px;border-radius:10px">
+                    <div style="font-weight:600;margin-bottom:8px;color:#2c3e50">💡 下一步建议</div>
+                    <ul style="margin:0;padding-left:18px;line-height:1.7;color:#34495e;font-size:13px">
+                        ${s.next_steps.map(x => `<li>${escapeHtml(x)}</li>`).join('')}
+                    </ul>
+                </div>
+            </div>
+        `;
+    }
+
+    function loadTrainingSamples() {
+        const count = document.getElementById('sampleCountSelect').value;
+        const difficulty = document.getElementById('difficultySelect').value;
+        const btn = document.querySelector('button[onclick="loadTrainingSamples()"]');
+        btn.disabled = true; btn.textContent = '加载中...';
+
+        fetch(`/api/training/samples?count=${count}&difficulty=${difficulty}`)
+            .then(r => r.json())
+            .then(data => {
+                btn.disabled = false; btn.textContent = '🎲 新批次样本';
+                if (!data.success) { alert('加载失败'); return; }
+                currentSamples = data.samples;
+                currentAnnotations = [];
+                document.getElementById('currentDifficultyBadge').textContent =
+                    '难度: ' + (data.difficulty === 'hard' ? '困难' : data.difficulty === 'normal' ? '普通' : '自动');
+                renderSamples(data.samples);
+                document.getElementById('submitAllBtn').disabled = false;
+                document.getElementById('batchReport').style.display = 'none';
+            })
+            .catch(() => { btn.disabled = false; btn.textContent = '🎲 新批次样本'; });
+    }
+
+    function renderSamples(samples) {
+        const c = document.getElementById('samplesContainer');
+        c.innerHTML = samples.map(s => {
+            const img = 'data:image/png;base64,' + btoa(String.fromCharCode(...new Uint8Array(hexToBytes(s.image_data))));
+            return `<div class="annotation-card" id="card-${s.id}">
+                <div style="text-align:center;margin-bottom:10px">
+                    <img src="${img}" alt="captcha" style="border-radius:8px;border:2px solid #ddd;background:#fff" />
+                </div>
+                <input type="text" class="annotation-input" id="input-${s.id}"
+                    placeholder="输入验证码"
+                    maxlength="8"
+                    autocomplete="off"
+                    data-sample="${s.id}"
+                    data-expected="${s.captcha_text}" />
+                <div id="feedback-${s.id}" style="min-height:20px;text-align:center;margin-top:4px;font-size:12px"></div>
+            </div>`;
+        }).join('');
+
+        document.querySelectorAll('.annotation-input').forEach(inp => {
+            inp.addEventListener('keydown', e => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    submitSingle(inp);
+                }
+            });
+        });
+
+        document.querySelectorAll('.annotation-input')[0]?.focus();
+    }
+
+    function submitSingle(inp) {
+        const id = inp.getAttribute('data-sample');
+        const expected = inp.getAttribute('data-expected').toUpperCase();
+        const val = inp.value.trim().toUpperCase();
+        const feedback = document.getElementById('feedback-' + id);
+        const card = document.getElementById('card-' + id);
+
+        if (!val) {
+            feedback.innerHTML = '<span style="color:#888">请输入</span>';
+            return;
         }
 
-        async function submitSingleAnnotation(id, inputEl) {
-            const label = inputEl.value.trim();
-            if (!label) return;
+        const isCorrect = val === expected;
+        inp.classList.remove('input-correct', 'input-wrong');
+        inp.classList.add(isCorrect ? 'input-correct' : 'input-wrong');
+        inp.disabled = true;
+        feedback.innerHTML = isCorrect
+            ? '<span style="color:#27ae60;font-weight:bold">✓ 正确！</span>'
+            : `<span style="color:#c0392b;font-weight:bold">✗ 错误</span><span style="color:#888;margin-left:6px">正确答案：${escapeHtml(expected)}</span>`;
 
-            const sample = currentSamples.find(s => s.id === id);
-            if (!sample) return;
+        const idx = currentAnnotations.findIndex(a => a.sample_id === id);
+        const record = { sample_id: id, expected: expected, label: val, is_correct: isCorrect };
+        if (idx >= 0) currentAnnotations[idx] = record;
+        else currentAnnotations.push(record);
 
-            try {
-                const response = await fetch('/api/annotations', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        captcha_text: sample.captcha_text,
-                        label: label,
-                        source: 'training'
-                    })
-                });
-                const data = await response.json();
+        fetch('/api/annotations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ captcha_text: expected, label: val, source: 'training' })
+        });
+    }
 
+    function submitAllAnnotations() {
+        const inputs = document.querySelectorAll('.annotation-input');
+        inputs.forEach(inp => { if (!inp.disabled) submitSingle(inp); });
+
+        setTimeout(() => {
+            const difficulty = document.getElementById('difficultySelect').value;
+            fetch('/api/training/batches', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    samples: currentSamples,
+                    annotations: currentAnnotations,
+                    difficulty: difficulty
+                })
+            })
+            .then(r => r.json())
+            .then(data => {
                 if (data.success) {
-                    const statusEl = document.getElementById(`status-${id}`);
-                    const isCorrect = data.record.is_correct;
-                    
-                    if (isCorrect) {
-                        statusEl.innerHTML = '<span class="badge badge-success">✓ 正确</span>';
-                        inputEl.classList.add('input-correct');
-                    } else {
-                        statusEl.innerHTML = `<span class="badge badge-danger">✗ 正确: ${escapeHtml(sample.captcha_text)}</span>`;
-                        inputEl.classList.add('input-wrong');
-                    }
-                    inputEl.disabled = true;
-                    
-                    loadStats();
-                    loadSuggestion();
-                } else {
-                    showToast(data.message || '提交失败', 'error');
+                    document.getElementById('batchCount').textContent =
+                        (parseInt(document.getElementById('batchCount').textContent) || 0) + 1;
+                    renderBatchReport(data.batch);
+                    document.getElementById('batchReport').style.display = 'block';
+                    document.getElementById('submitAllBtn').disabled = true;
+                    document.getElementById('submitAllBtn').textContent = '✅ 已完成，点击"新批次样本"开始下一批';
                 }
-            } catch (error) {
-                console.error('提交失败:', error);
-                showToast('提交失败', 'error');
-            }
-        }
-
-        async function submitAllAnnotations() {
-            const inputs = document.querySelectorAll('.annotation-input:not([disabled])');
-            let submitted = 0;
-            let correct = 0;
-
-            for (const input of inputs) {
-                const label = input.value.trim();
-                if (!label) continue;
-                
-                const id = input.getAttribute('data-id');
-                const sample = currentSamples.find(s => s.id === id);
-                if (!sample) continue;
-
-                try {
-                    const response = await fetch('/api/annotations', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            captcha_text: sample.captcha_text,
-                            label: label,
-                            source: 'training'
-                        })
-                    });
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        submitted++;
-                        if (data.record.is_correct) correct++;
-                        
-                        const statusEl = document.getElementById(`status-${id}`);
-                        if (data.record.is_correct) {
-                            statusEl.innerHTML = '<span class="badge badge-success">✓ 正确</span>';
-                            input.classList.add('input-correct');
-                        } else {
-                            statusEl.innerHTML = `<span class="badge badge-danger">✗ 正确: ${escapeHtml(sample.captcha_text)}</span>`;
-                            input.classList.add('input-wrong');
-                        }
-                        input.disabled = true;
-                    }
-                } catch (e) {
-                    console.error(e);
-                }
-            }
-
-            if (submitted > 0) {
-                showToast(`已提交 ${submitted} 个标注，正确 ${correct} 个`);
-                loadStats();
-                loadSuggestion();
-            } else {
-                showToast('请先输入标注内容', 'error');
-            }
-        }
-
-        async function loadStats() {
-            try {
-                const response = await fetch('/api/stats');
-                const data = await response.json();
-                const s = data.summary;
-
-                document.getElementById('total-submissions').textContent = s.total_submissions;
-                document.getElementById('accuracy').textContent = s.accuracy;
-                document.getElementById('total-annotations').textContent = s.total_annotations;
-                document.getElementById('annotation-accuracy').textContent = s.annotation_accuracy;
-            } catch (error) {
-                console.error('加载统计失败:', error);
-            }
-        }
-
-        async function renderTrend() {
-            try {
-                const response = await fetch('/api/training/suggestion');
-                const data = await response.json();
-                const trend = data.suggestion.trend;
-                const container = document.getElementById('trend-chart');
-
-                if (!trend || trend.length < 2) {
-                    container.innerHTML = '<p class="empty-text">暂无足够数据展示趋势（需要至少5条记录）。继续在主页或标注练习中积累样本。</p>';
-                    return;
-                }
-
-                const maxVal = 100;
-                const bars = trend.map((t, i) => {
-                    const height = (t.accuracy / maxVal) * 100;
-                    const color = t.accuracy >= 70 ? 'bg-success' : t.accuracy >= 40 ? 'bg-warning' : 'bg-danger';
-                    return `
-                        <div class="trend-bar-col">
-                            <div class="trend-bar" style="height: ${height}%">
-                                <div class="trend-bar-fill ${color}"></div>
-                                <span class="trend-bar-label">${t.accuracy}%</span>
-                            </div>
-                            <div class="trend-bar-xlabel">${escapeHtml(t.label)}</div>
-                        </div>
-                    `;
-                }).join('');
-
-                container.innerHTML = `
-                    <div class="trend-chart-container">
-                        <div class="trend-y-axis">
-                            <span>100%</span>
-                            <span>75%</span>
-                            <span>50%</span>
-                            <span>25%</span>
-                            <span>0%</span>
-                        </div>
-                        <div class="trend-bars">
-                            ${bars}
-                        </div>
-                    </div>
-                    <div class="trend-legend">
-                        <div class="legend-item"><span class="legend-dot bg-success"></span>高准确率 (≥70%)</div>
-                        <div class="legend-item"><span class="legend-dot bg-warning"></span>中等准确率 (40-70%)</div>
-                        <div class="legend-item"><span class="legend-dot bg-danger"></span>低准确率 (≤40%)</div>
-                    </div>
-                `;
-            } catch (error) {
-                console.error('加载趋势失败:', error);
-            }
-        }
-
-        async function loadAnnotationHistory() {
-            try {
-                const response = await fetch('/api/annotations?limit=100');
-                const data = await response.json();
-                const tbody = document.getElementById('annotation-body');
-
-                if (!data.annotations || data.annotations.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" class="empty-text">暂无标注记录。在上方"标注练习"中开始标注吧。</td></tr>';
-                    return;
-                }
-
-                tbody.innerHTML = data.annotations.map(a => `
-                    <tr>
-                        <td>${escapeHtml(a.timestamp)}</td>
-                        <td><code class="captcha-code">${escapeHtml(a.captcha_text)}</code></td>
-                        <td><code class="${a.is_correct ? 'correct' : 'wrong'}">${escapeHtml(a.label)}</code></td>
-                        <td>
-                            <span class="badge ${a.is_correct ? 'badge-success' : 'badge-danger'}">
-                                ${a.is_correct ? '✓ 正确' : '✗ 错误'}
-                            </span>
-                        </td>
-                        <td class="muted">${escapeHtml(a.source || '-')}</td>
-                    </tr>
-                `).join('');
-            } catch (error) {
-                console.error('加载标注历史失败:', error);
-            }
-        }
-
-        loadStats();
-        loadSuggestion();
-        refreshSamples();
-        setInterval(() => {
-            loadStats();
+            });
             loadSuggestion();
-        }, 20000);
+        }, 200);
+    }
+
+    function renderBatchReport(batch) {
+        const content = document.getElementById('batchReportContent');
+        const deltaHtml = batch.delta === null
+            ? '<span class="muted">(首批次无对比)</span>'
+            : batch.delta > 0
+                ? `<span style="color:#27ae60;font-weight:bold">↑ 比上一批提升 ${batch.delta}%</span>`
+                : batch.delta < 0
+                    ? `<span style="color:#c0392b;font-weight:bold">↓ 比上一批下降 ${Math.abs(batch.delta)}%</span>`
+                    : `<span class="muted">和上一批持平</span>`;
+
+        const wrongCharsHtml = (batch.top_wrong_chars && batch.top_wrong_chars.length > 0)
+            ? `<div style="margin-top:12px;padding:12px;background:#fff5f0;border-radius:8px">
+                    <div style="font-weight:600;margin-bottom:8px;color:#c0392b">🔤 错得最多的字符（这一批）</div>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap">
+                        ${batch.top_wrong_chars.map(([ch, cnt]) => `
+                            <div style="padding:6px 14px;background:#c0392b;color:#fff;border-radius:20px;font-family:monospace">
+                                <span style="font-size:18px;font-weight:bold;margin-right:6px">${escapeHtml(ch)}</span>
+                                <span style="font-size:12px">× ${cnt} 次</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>`
+            : '<div style="margin-top:12px;color:#27ae60">🎉 这批没有字符被识别错！</div>';
+
+        const detailsHtml = batch.details && batch.details.length > 0
+            ? `<div style="margin-top:16px">
+                <div style="font-weight:600;margin-bottom:8px">📋 本批标注明细</div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
+                    ${batch.details.map(d => `
+                        <div style="padding:8px 10px;border:1px solid ${d.is_correct ? '#27ae6033' : '#c0392b33'};border-radius:6px;background:${d.is_correct ? '#f0fff4' : '#fff5f5'}">
+                            <div style="font-family:monospace;font-size:12px">
+                                <span style="color:#888">期望：</span><strong>${escapeHtml(d.expected)}</strong><br/>
+                                <span style="color:#888">标注：</span>
+                                <strong style="color:${d.is_correct ? '#27ae60' : '#c0392b'}">${escapeHtml(d.label || '(空)')}</strong>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>` : '';
+
+        content.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:15px">
+                <div>
+                    <div style="font-size:14px;color:#666">批次ID：${batch.id}｜${escapeHtml(batch.timestamp)}｜难度：${batch.difficulty === 'hard' ? '困难' : batch.difficulty === 'normal' ? '普通' : '自动'}</div>
+                    <div style="margin:10px 0;display:flex;gap:20px;align-items:baseline;flex-wrap:wrap">
+                        <div><span style="font-size:36px;font-weight:bold;color:${batch.accuracy >= 80 ? '#27ae60' : batch.accuracy >= 50 ? '#f39c12' : '#c0392b'}">${batch.accuracy}%</span>
+                        <div class="muted">本批正确率</div></div>
+                        <div><span style="font-size:24px;font-weight:bold;color:#27ae60">✔ ${batch.correct}</span> / <span style="font-size:24px;font-weight:bold;color:#c0392b">✘ ${batch.wrong}</span>
+                        <div class="muted">共 ${batch.total} 题</div></div>
+                        <div style="padding:8px 16px;border-radius:10px;background:#fff">${deltaHtml}</div>
+                    </div>
+                </div>
+            </div>
+            ${wrongCharsHtml}
+            ${detailsHtml}
+        `;
+    }
+
+    function loadBatchHistory() {
+        fetch('/api/training/batches?limit=20')
+            .then(r => r.json())
+            .then(data => {
+                const el = document.getElementById('batchHistory');
+                if (data.batches.length === 0) {
+                    el.innerHTML = '<p class="muted" style="text-align:center;padding:20px">暂无历史批次</p>';
+                    return;
+                }
+                el.innerHTML = data.batches.map(b => {
+                    const deltaHtml = b.delta === null
+                        ? '<span class="muted" style="font-size:12px">(首批)</span>'
+                        : b.delta > 0
+                            ? `<span style="color:#27ae60;font-weight:bold">↑ +${b.delta}%</span>`
+                            : b.delta < 0
+                                ? `<span style="color:#c0392b;font-weight:bold">↓ ${b.delta}%</span>`
+                                : `<span class="muted">持平</span>`;
+                    const wrongHtml = b.top_wrong_chars && b.top_wrong_chars.length > 0
+                        ? `<div style="margin-top:8px;font-size:12px"><span class="muted">易错字符：</span>${b.top_wrong_chars.slice(0,3).map(([ch,cnt]) => `<span style="padding:2px 8px;background:#c0392b;color:#fff;border-radius:12px;margin:0 3px;font-family:monospace">${escapeHtml(ch)}×${cnt}</span>`).join('')}</div>`
+                        : '';
+                    return `<div class="training-batch-card" style="margin:12px 0;border-left:4px solid ${b.accuracy >= 80 ? '#27ae60' : b.accuracy >= 50 ? '#f39c12' : '#c0392b'}">
+                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+                            <div>
+                                <h4 style="margin:0 0 5px 0">
+                                    <span style="font-family:monospace;color:#2c3e50">${escapeHtml(b.id)}</span>
+                                    <span class="badge ${b.accuracy >= 80 ? 'badge-success' : b.accuracy >= 50 ? 'badge-warning' : 'badge-danger'}" style="margin-left:8px">${b.accuracy}%</span>
+                                    ${deltaHtml}
+                                </h4>
+                                <div class="muted" style="font-size:12px">${escapeHtml(b.timestamp)}｜难度：${b.difficulty === 'hard' ? '困难' : b.difficulty === 'normal' ? '普通' : '自动'}｜✔ ${b.correct} / ✘ ${b.wrong} / 共 ${b.total}</div>
+                                ${wrongHtml}
+                            </div>
+                        </div>
+                    </div>`;
+                }).join('');
+            });
+    }
+
+    function loadTrendData() {
+        fetch('/api/training/suggestion')
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) return;
+                const trend = data.suggestion.trend || [];
+                const bars = document.getElementById('trendBars');
+                if (trend.length === 0) {
+                    bars.innerHTML = '<div class="muted" style="padding:20px;text-align:center">暂无足够数据生成趋势</div>';
+                    return;
+                }
+                bars.innerHTML = trend.map(t => {
+                    const h = Math.max(8, t.accuracy);
+                    const cls = t.accuracy >= 80 ? 'bg-success' : t.accuracy >= 50 ? 'bg-warning' : 'bg-danger';
+                    return `<div class="trend-bar" style="height:${h}%" title="${t.label} - ${t.accuracy}%">
+                        <div class="trend-bar-fill ${cls}" style="height:100%"></div>
+                        <div class="trend-bar-label">${t.accuracy}%</div>
+                        <div class="trend-bar-count">${t.count}</div>
+                    </div>`;
+                }).join('');
+            });
+    }
+
+    function loadAnnotationHistory() {
+        fetch('/api/annotations?limit=100')
+            .then(r => r.json())
+            .then(data => {
+                const tbody = document.getElementById('annotationTableBody');
+                tbody.innerHTML = data.annotations.map(a => {
+                    const resultCls = a.is_correct ? 'text-success' : 'text-danger';
+                    const resultText = a.is_correct ? '✔ 正确' : '✗ 错误';
+                    return `<tr>
+                        <td>${escapeHtml(a.timestamp)}</td>
+                        <td><code>${escapeHtml(a.captcha_text)}</code></td>
+                        <td><code class="${resultCls}">${escapeHtml(a.label)}</code></td>
+                        <td><span class="${resultCls}">${resultText}</span></td>
+                        <td>${escapeHtml(a.source || '-')}</td>
+                    </tr>`;
+                }).join('');
+            });
+    }
+
+    function hexToBytes(hex) {
+        const bytes = [];
+        for (let i = 0; i < hex.length; i += 2) bytes.push(parseInt(hex.substr(i, 2), 16));
+        return bytes;
+    }
+
+    loadSuggestion();
     </script>
 </body>
 </html>

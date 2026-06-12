@@ -14,9 +14,11 @@
                 <p class="subtitle">验证码识别数据统计与管理</p>
             </div>
             <div class="header-links">
-                <a href="{{ url_for('index') }}" class="back-link">← 返回主页</a>
+                <a href="{{ url_for('index') }}" class="back-link">🏠 主页</a>
+                <a href="{{ url_for('admin_panel') }}" class="back-link active">📊 管理面板</a>
                 <a href="{{ url_for('samples_page') }}" class="back-link">📚 样本库</a>
                 <a href="{{ url_for('training_page') }}" class="back-link">🎯 训练模拟</a>
+                <a href="{{ url_for('quality_page') }}" class="back-link">📈 质量看板</a>
             </div>
         </header>
 

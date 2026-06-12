@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据质量看板</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="admin-header">
+            <h1>📈 数据质量看板</h1>
+            <div class="header-links">
+                <a href="/">🏠 主页</a>
+                <a href="/admin">📊 管理面板</a>
+                <a href="/samples">📚 样本库</a>
+                <a href="/training">🎯 训练模拟</a>
+                <a href="/quality" class="active">📈 质量看板</a>
+            </div>
+        </header>
+
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-label">追踪验证码数</div>
+                <div class="stat-value" id="trackCount">-</div>
+            </div>
+            <div class="stat-card bg-info">
+                <div class="stat-label">总提交记录</div>
+                <div class="stat-value" id="totalSubmissions">-</div>
+            </div>
+            <div class="stat-card bg-success">
+                <div class="stat-label">整体准确率</div>
+                <div class="stat-value" id="overallAccuracy">-</div>
+            </div>
+            <div class="stat-card bg-warning">
+                <div class="stat-label">纠错总数</div>
+                <div class="stat-value" id="totalCorrections">-</div>
+            </div>
+            <div class="stat-card bg-danger">
+                <div class="stat-label">问题验证码 TOP</div>
+                <div class="stat-value" id="highTrouble">-</div>
+            </div>
+            <div class="stat-card bg-primary">
+                <div class="stat-label">训练批次</div>
+                <div class="stat-value" id="totalTrainingBatches">-</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2 style="margin-top:20px">🔍 验证码追踪链路（按问题严重度排序）</h2>
+            <p class="muted">每条验证码追踪：识别 → 纠错 → 训练标注的完整闭环</p>
+            <div class="filter-bar" style="margin:15px 0">
+                <div class="filter-group">
+                    <span>搜索验证码：</span>
+                    <input type="text" id="textFilter" placeholder="输入文本过滤" />
+                </div>
+                <div class="filter-group">
+                    <span>最低提交次数：</span>
+                    <select id="minSubFilter">
+                        <option value="0">不限</option>
+                        <option value="2">2次以上</option>
+                        <option value="5">5次以上</option>
+                        <option value="10">10次以上</option>
+                    </select>
+                </div>
+                <button type="button" class="btn btn-primary" onclick="applyQualityFilters()">应用筛选</button>
+                <button type="button" class="btn" onclick="resetQualityFilters()">重置</button>
+                <div class="filter-count">匹配 <span id="qualityMatchCount">-</span> 条</div>
+            </div>
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>验证码</th>
+                        <th>提交统计</th>
+                        <th>准确率</th>
+                        <th>纠错链路</th>
+                        <th>标注记录</th>
+                        <th>问题分数</th>
+                        <th>问题等级</th>
+                    </tr>
+                </thead>
+                <tbody id="qualityTableBody">
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2 style="margin-top:30px">⚠️ 易错字符分析（来自训练批次）</h2>
+            <div id="wrongCharStats" class="annotation-history-card">
+                <p class="muted">分析历史训练批次中识别错误最多的字符，帮助发现容易混淆的字符组合</p>
+                <div id="wrongCharContainer" class="stats-row" style="flex-wrap: wrap">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = String(text);
+        return div.innerHTML;
+    }
+
+    let allOverviewData = [];
+
+    function loadQualityData() {
+        fetch('/api/quality/overview')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    allOverviewData = data.overview;
+                    renderQualityTable(allOverviewData);
+                    renderSummary(data.summary);
+                }
+            });
+        loadWrongChars();
+    }
+
+    function renderSummary(s) {
+        document.getElementById('trackCount').textContent = allOverviewData.length;
+        document.getElementById('totalSubmissions').textContent = s.total_submissions;
+        document.getElementById('overallAccuracy').textContent = s.accuracy + '%';
+        document.getElementById('totalCorrections').textContent = s.total_corrections;
+        const highTrouble = allOverviewData.filter(x => x.wrong > 0).slice(0,1).length ?
+            (allOverviewData[0]?.text || '-') : '-';
+        document.getElementById('highTrouble').textContent = highTrouble;
+        document.getElementById('totalTrainingBatches').textContent = s.training_batches_count;
+    }
+
+    function troubleLevel(score) {
+        if (score >= 10) return { label: '严重', cls: 'badge badge-danger' };
+        if (score >= 5) return { label: '中等', cls: 'badge badge-warning' };
+        if (score >= 1) return { label: '轻微', cls: 'badge badge-info' };
+        return { label: '正常', cls: 'badge badge-success' };
+    }
+
+    function renderQualityTable(data) {
+        const tbody = document.getElementById('qualityTableBody');
+        const textFilter = document.getElementById('textFilter').value.trim().toUpperCase();
+        const minSub = parseInt(document.getElementById('minSubFilter').value) || 0;
+
+        let filtered = data;
+        if (textFilter) {
+            filtered = filtered.filter(x =>
+                x.text.toUpperCase().includes(textFilter) ||
+                x.corrections.some(c =>
+                    (c.original || '').toUpperCase().includes(textFilter) ||
+                    (c.correct || '').toUpperCase().includes(textFilter)
+            );
+        }
+        if (minSub > 0) {
+            filtered = filtered.filter(x => x.submissions >= minSub);
+        }
+
+        document.getElementById('qualityMatchCount').textContent = filtered.length;
+
+        tbody.innerHTML = filtered.map(item => {
+            const accCls = item.accuracy === null ? 'muted' :
+                item.accuracy >= 80 ? 'text-success' :
+                item.accuracy >= 50 ? 'text-warning' : 'text-danger';
+            const accText = item.accuracy === null ? '无数据' : item.accuracy + '%';
+            const level = troubleLevel(item.trouble_score);
+
+            const correctionsHtml = item.corrections.length > 0 ? item.corrections.slice(0, 3).map(c => {
+                const statusCls = c.status === 'trusted' ? 'badge-success' :
+                    c.status === 'suspect' ? 'badge-warning' : 'badge-danger';
+                const statusText = c.status === 'trusted' ? '可信' :
+                    c.status === 'suspect' ? '可疑' : '废弃';
+                return `<div style="margin:2px 0">
+                    <span style="font-family:monospace;color:#c0392b">${escapeHtml(c.original)}</span>
+                    <span style="color:#888">→</span>
+                    <span style="font-family:monospace;color:#27ae60">${escapeHtml(c.correct)}</span>
+                    <span class="badge ${statusCls}" style="margin-left:4px;font-size:10px">${statusText}</span>
+                </div>`;
+            }).join('') : '<span class="muted">—</span>';
+
+            const annCorrect = item.annotations.filter(a => a.is_correct).length;
+            const annWrong = item.annotations.length - annCorrect;
+            const annotationsHtml = item.annotations.length > 0 ?
+                `<span style="color:#27ae60">✔ ${annCorrect}</span> / <span style="color:#c0392b">✘ ${annWrong}</span>` :
+                '<span class="muted">—</span>';
+
+            return `<tr>
+                <td><code style="font-size:16px;letter-spacing:2px">${escapeHtml(item.text)}</code></td>
+                <td><span class="text-success">✔ ${item.correct}</span> / <span class="text-danger">✘ ${item.wrong}</span> (${item.submissions}总)</td>
+                <td class="${accCls}"><strong>${accText}</strong></td>
+                <td>${correctionsHtml}${item.corrections.length > 3 ? `<div class="muted" style="font-size:11px">共${item.corrections.length}条</div>` : ''}</td>
+                <td>${annotationsHtml}</td>
+                <td style="font-weight:bold">${item.trouble_score}</td>
+                <td><span class="badge ${level.cls}">${level.label}</span></td>
+            </tr>`;
+        }).join('');
+    }
+
+    function applyQualityFilters() {
+        renderQualityTable(allOverviewData);
+    }
+
+    function resetQualityFilters() {
+        document.getElementById('textFilter').value = '';
+        document.getElementById('minSubFilter').value = '0';
+        renderQualityTable(allOverviewData);
+    }
+
+    function loadWrongChars() {
+        fetch('/api/training/batches?limit=20')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    const charCounter = {};
+                    data.batches.forEach(b => {
+                        (b.top_wrong_chars || []).forEach(([ch, cnt]) => {
+                            charCounter[ch] = (charCounter[ch] || 0) + cnt;
+                        });
+                    });
+                    const sorted = Object.entries(charCounter).sort((a, b) => b[1] - a[1]).slice(0, 15);
+                    const total = sorted.reduce((s, x) => s + x[1], 0);
+                    const container = document.getElementById('wrongCharContainer');
+                    if (sorted.length === 0) {
+                        container.innerHTML = '<p class="muted" style="padding:15px">暂无训练批次数据，先去训练模拟区标注几批吧</p>';
+                    } else {
+                            container.innerHTML = sorted.map(([ch, cnt]) => {
+                                const pct = (cnt / total * 100).toFixed(0);
+                                const cls = cnt >= 5 ? 'bg-danger' : cnt >= 3 ? 'bg-warning' : 'bg-info';
+                                return `<div class="stat-card ${cls}" style="min-width:110px;padding:12px;text-align:center;margin:6px">
+                                    <div style="font-size:28px;font-weight:bold;font-family:monospace">${escapeHtml(ch)}</div>
+                                    <div class="muted" style="font-size:12px">错误 ${cnt} 次</div>
+                                    <div style="font-size:11px">占比 ${pct}%</div>
+                                </div>`;
+                            }).join('');
+                        }
+                }
+            });
+    }
+
+    document.getElementById('textFilter')?.addEventListener('keydown', e => {
+        if (e.key === 'Enter') applyQualityFilters();
+    });
+
+    loadQualityData();
+    </script>
+</body>
+</html>
