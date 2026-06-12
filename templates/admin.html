@@ -13,7 +13,11 @@
                 <h1>📊 管理面板</h1>
                 <p class="subtitle">验证码识别数据统计与管理</p>
             </div>
-            <a href="{{ url_for('index') }}" class="back-link">← 返回主页</a>
+            <div class="header-links">
+                <a href="{{ url_for('index') }}" class="back-link">← 返回主页</a>
+                <a href="{{ url_for('samples_page') }}" class="back-link">📚 样本库</a>
+                <a href="{{ url_for('training_page') }}" class="back-link">🎯 训练模拟</a>
+            </div>
         </header>
 
         <div class="stats-grid">
@@ -75,6 +79,13 @@
                 </button>
                 <input type="number" id="mutation-count" value="5" min="1" max="20" style="width: 60px; padding: 8px;">
             </div>
+            <div class="export-import-control">
+                <button class="btn btn-success" onclick="exportData()">📥 导出数据</button>
+                <label class="btn btn-warning file-btn">
+                    📤 导入数据
+                    <input type="file" id="import-file" accept=".json" onchange="importData(event)" style="display:none;">
+                </label>
+            </div>
             <button class="btn btn-refresh" onclick="loadData()">🔄 刷新数据</button>
         </div>
 
@@ -85,6 +96,30 @@
         </div>
 
         <div id="submissions" class="tab-content active">
+            <div class="filter-bar">
+                <div class="filter-group">
+                    <label>结果筛选：</label>
+                    <select id="filter-result" onchange="applyFilters()">
+                        <option value="all">全部</option>
+                        <option value="correct">仅正确</option>
+                        <option value="wrong">仅错误</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>文本搜索：</label>
+                    <input type="text" id="filter-text" placeholder="输入验证码内容..." oninput="applyFilters()">
+                </div>
+                <div class="filter-group">
+                    <label>日期从：</label>
+                    <input type="date" id="filter-date-from" onchange="applyFilters()">
+                </div>
+                <div class="filter-group">
+                    <label>到：</label>
+                    <input type="date" id="filter-date-to" onchange="applyFilters()">
+                </div>
+                <button class="btn btn-refresh" onclick="resetFilters()">重置</button>
+                <div class="filter-count" id="filter-count"></div>
+            </div>
             <div class="table-container">
                 <table class="data-table">
                     <thead>
@@ -131,6 +166,13 @@
     <script>
         let currentTab = 'submissions';
 
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
         function switchTab(tabName) {
             currentTab = tabName;
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -161,7 +203,7 @@
             document.getElementById('unique-captchas').textContent = summary.unique_captchas;
         }
 
-        function updateSubmissions(submissions) {
+        function renderSubmissions(submissions) {
             const tbody = document.getElementById('submissions-body');
             if (submissions.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" class="empty-text">暂无提交记录</td></tr>';
@@ -170,17 +212,21 @@
             
             tbody.innerHTML = submissions.map(s => `
                 <tr>
-                    <td>${s.timestamp}</td>
-                    <td><code class="captcha-code">${s.captcha_text}</code></td>
-                    <td><code class="${s.is_correct ? 'correct' : 'wrong'}">${s.user_input || '(空)'}</code></td>
+                    <td>${escapeHtml(s.timestamp)}</td>
+                    <td><code class="captcha-code">${escapeHtml(s.captcha_text)}</code></td>
+                    <td><code class="${s.is_correct ? 'correct' : 'wrong'}">${escapeHtml(s.user_input || '(空)')}</code></td>
                     <td>
                         <span class="badge ${s.is_correct ? 'badge-success' : 'badge-danger'}">
                             ${s.is_correct ? '✓ 正确' : '✗ 错误'}
                         </span>
                     </td>
-                    <td class="muted">${s.ip || '-'}</td>
+                    <td class="muted">${escapeHtml(s.ip || '-')}</td>
                 </tr>
             `).join('');
+        }
+
+        function updateSubmissions(submissions) {
+            renderSubmissions(submissions);
         }
 
         function updateCaptchaStats(stats) {
@@ -206,7 +252,7 @@
                 
                 return `
                     <tr>
-                        <td><code class="captcha-code">${s.text}</code></td>
+                        <td><code class="captcha-code">${escapeHtml(s.text)}</code></td>
                         <td>${s.total}</td>
                         <td class="success-text">${s.correct}</td>
                         <td class="danger-text">${s.wrong}</td>
@@ -220,6 +266,42 @@
                     </tr>
                 `;
             }).join('');
+        }
+
+        async function applyFilters() {
+            const resultFilter = document.getElementById('filter-result').value;
+            const textFilter = document.getElementById('filter-text').value;
+            const dateFrom = document.getElementById('filter-date-from').value;
+            const dateTo = document.getElementById('filter-date-to').value;
+
+            try {
+                const response = await fetch('/api/submissions/filter', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        result_filter: resultFilter,
+                        text_filter: textFilter,
+                        date_from: dateFrom,
+                        date_to: dateTo,
+                        limit: 500
+                    })
+                });
+                const data = await response.json();
+                
+                renderSubmissions(data.submissions);
+                document.getElementById('filter-count').textContent = `匹配 ${data.count} 条`;
+            } catch (error) {
+                console.error('筛选失败:', error);
+            }
+        }
+
+        function resetFilters() {
+            document.getElementById('filter-result').value = 'all';
+            document.getElementById('filter-text').value = '';
+            document.getElementById('filter-date-from').value = '';
+            document.getElementById('filter-date-to').value = '';
+            document.getElementById('filter-count').textContent = '';
+            loadData();
         }
 
         async function setGlobalDifficulty() {
@@ -257,8 +339,8 @@
                     <div class="samples-grid">
                         ${data.samples.map(s => `
                             <div class="sample-card">
-                                <img src="data:image/png;base64,${hexToBase64(s.image_data)}" alt="${s.text}">
-                                <code class="sample-text">${s.text}</code>
+                                <img src="data:image/png;base64,${hexToBase64(s.image_data)}" alt="${escapeHtml(s.text)}">
+                                <code class="sample-text">${escapeHtml(s.text)}</code>
                             </div>
                         `).join('')}
                     </div>
@@ -275,6 +357,45 @@
             let binary = '';
             bytes.forEach(b => binary += String.fromCharCode(b));
             return btoa(binary);
+        }
+
+        function exportData() {
+            window.location.href = '/api/data/export';
+            showToast('正在导出数据...');
+        }
+
+        async function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (!confirm('确定要导入此数据吗？将与现有数据合并。')) {
+                event.target.value = '';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('merge', 'true');
+
+            try {
+                const response = await fetch('/api/data/import', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast(`导入成功：${data.imported_submissions}条提交, ${data.imported_corrections}条纠错, ${data.imported_annotations}条标注`);
+                    loadData();
+                } else {
+                    showToast(data.message || '导入失败', 'error');
+                }
+            } catch (error) {
+                console.error('导入失败:', error);
+                showToast('导入失败，请检查文件格式', 'error');
+            } finally {
+                event.target.value = '';
+            }
         }
 
         function showToast(message, type = 'success') {

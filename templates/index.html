@@ -64,6 +64,8 @@
 
         <div class="links">
             <a href="{{ url_for('admin_panel') }}" class="admin-link">📊 管理面板</a>
+            <a href="{{ url_for('samples_page') }}" class="admin-link">📚 样本库</a>
+            <a href="{{ url_for('training_page') }}" class="admin-link">🎯 训练模拟</a>
         </div>
 
         <div class="api-info">
@@ -78,12 +80,29 @@
                 <code>/api/captcha/{session_id}/verify</code>
                 <span class="desc">提交验证码验证结果</span>
             </div>
+            <div class="endpoint">
+                <span class="method">GET</span>
+                <code>/api/data/export</code>
+                <span class="desc">导出所有数据为JSON</span>
+            </div>
+            <div class="endpoint">
+                <span class="method">GET</span>
+                <code>/api/training/suggestion</code>
+                <span class="desc">获取训练难度建议和准确率趋势</span>
+            </div>
         </div>
     </div>
 
     <script>
         let lastOriginalText = '';
         let lastUserAnswer = '';
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
 
         function refreshCaptcha() {
             const difficulty = document.getElementById('difficulty').value;
@@ -94,6 +113,7 @@
             document.getElementById('result-message').textContent = '';
             document.getElementById('result-message').className = 'result-message';
             document.getElementById('correction-form').classList.add('hidden');
+            lastOriginalText = '';
         }
 
         async function submitCaptcha(event) {
@@ -115,17 +135,32 @@
 
                 lastUserAnswer = captcha;
 
+                if (!data.success) {
+                    showMessage('⚠️ ' + (data.message || '请求失败'), 'error');
+                    document.getElementById('correction-form').classList.add('hidden');
+                    if (data.error_code === 'captcha_expired' || data.error_code === 'session_expired') {
+                        setTimeout(refreshCaptcha, 1500);
+                    }
+                    return;
+                }
+
                 if (data.is_correct) {
                     showMessage('✅ ' + data.message, 'success');
                     document.getElementById('correction-form').classList.add('hidden');
                     setTimeout(refreshCaptcha, 1500);
                 } else {
                     showMessage('❌ ' + data.message, 'error');
-                    lastOriginalText = data.correct_text;
-                    showCorrectionForm(captcha, data.correct_text);
+                    if (data.show_correction && data.correct_text) {
+                        lastOriginalText = data.correct_text;
+                        showCorrectionForm(captcha, data.correct_text);
+                    } else {
+                        document.getElementById('correction-form').classList.add('hidden');
+                        setTimeout(refreshCaptcha, 1500);
+                    }
                 }
             } catch (error) {
                 showMessage('网络错误，请重试', 'error');
+                document.getElementById('correction-form').classList.add('hidden');
             }
         }
 
@@ -139,9 +174,20 @@
         async function submitCorrection(event) {
             event.preventDefault();
             const correctText = document.getElementById('correct-text').value.trim();
+            const originalText = document.getElementById('original-text').value.trim();
             
-            if (!correctText) {
-                showMessage('请输入正确的验证码', 'error');
+            if (!correctText || !originalText) {
+                showMessage('请提供完整的纠错信息', 'error');
+                return;
+            }
+
+            if (originalText.toUpperCase() === correctText.toUpperCase()) {
+                showMessage('纠错内容与原始内容相同', 'error');
+                return;
+            }
+
+            if (!/^[A-Za-z0-9]{3,8}$/.test(correctText)) {
+                showMessage('验证码仅支持3-8位字母和数字', 'error');
                 return;
             }
 
@@ -150,17 +196,21 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        original_text: lastOriginalText,
+                        original_text: originalText,
                         correct_text: correctText
                     })
                 });
                 const data = await response.json();
                 
-                showMessage('🙏 ' + data.message, 'success');
-                document.getElementById('correction-form').classList.add('hidden');
-                setTimeout(refreshCaptcha, 1500);
+                if (data.success) {
+                    showMessage('🙏 ' + data.message, 'success');
+                    document.getElementById('correction-form').classList.add('hidden');
+                    setTimeout(refreshCaptcha, 1500);
+                } else {
+                    showMessage('⚠️ ' + (data.message || '提交失败'), 'error');
+                }
             } catch (error) {
-                showMessage('提交失败，请重试', 'error');
+                showMessage('网络错误，请重试', 'error');
             }
         }
 

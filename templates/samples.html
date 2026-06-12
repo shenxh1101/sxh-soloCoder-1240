@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>纠错样本库 - 验证码识别平台</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container admin-container">
+        <header class="admin-header">
+            <div class="header-left">
+                <h1>📚 纠错样本库</h1>
+                <p class="subtitle">管理纠错样本、预览生成效果、批量生成变异数据</p>
+            </div>
+            <div class="header-links">
+                <a href="{{ url_for('index') }}" class="back-link">← 返回主页</a>
+                <a href="{{ url_for('admin_panel') }}" class="back-link">📊 管理面板</a>
+                <a href="{{ url_for('training_page') }}" class="back-link">🎯 训练模拟</a>
+            </div>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">💡</div>
+                <div class="stat-info">
+                    <div class="stat-value" id="total-corrections">0</div>
+                    <div class="stat-label">纠错记录</div>
+                </div>
+            </div>
+            <div class="stat-card primary">
+                <div class="stat-icon">🧬</div>
+                <div class="stat-info">
+                    <div class="stat-value" id="corpus-size">0</div>
+                    <div class="stat-label">变异语料</div>
+                </div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-icon">🎲</div>
+                <div class="stat-info">
+                    <div class="stat-value" id="generated-count">0</div>
+                    <div class="stat-label">已生成样本</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="admin-actions">
+            <div class="mutation-control">
+                <button class="btn btn-primary" onclick="batchGenerateMutations()">
+                    🔬 批量生成变异样本
+                </button>
+                <input type="number" id="batch-count" value="8" min="1" max="20" style="width: 70px; padding: 8px;">
+            </div>
+            <button class="btn btn-refresh" onclick="loadCorrections()">🔄 刷新列表</button>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('correction-list')">纠错记录</button>
+            <button class="tab-btn" onclick="switchTab('batch-samples')">批量生成样本</button>
+        </div>
+
+        <div id="correction-list" class="tab-content active">
+            <div id="corrections-container" class="corrections-grid">
+                <p class="empty-text">暂无纠错记录。在主页输入错误验证码后可提交纠错。</p>
+            </div>
+        </div>
+
+        <div id="batch-samples" class="tab-content">
+            <div id="batch-samples-container" class="mutation-samples">
+                <p class="empty-text">点击"批量生成变异样本"按钮查看生成的验证码。</p>
+            </div>
+        </div>
+
+        <div id="preview-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>样本预览</h3>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body" id="modal-body">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentTab = 'correction-list';
+        let generatedCount = 0;
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function switchTab(tabName) {
+            currentTab = tabName;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        function hexToBase64(hexStr) {
+            const bytes = new Uint8Array(hexStr.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+            let binary = '';
+            bytes.forEach(b => binary += String.fromCharCode(b));
+            return btoa(binary);
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.classList.add('show'), 10);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }
+
+        async function loadCorrections() {
+            try {
+                const response = await fetch('/api/corrections');
+                const data = await response.json();
+                
+                document.getElementById('total-corrections').textContent = data.count;
+                document.getElementById('corpus-size').textContent = data.corpus.length;
+                
+                renderCorrections(data.corrections);
+            } catch (error) {
+                console.error('加载纠错记录失败:', error);
+            }
+        }
+
+        function renderCorrections(corrections) {
+            const container = document.getElementById('corrections-container');
+            
+            if (corrections.length === 0) {
+                container.innerHTML = '<p class="empty-text">暂无纠错记录。在主页输入错误验证码后可提交纠错。</p>';
+                return;
+            }
+
+            container.innerHTML = corrections.map(c => `
+                <div class="correction-card" data-id="${escapeHtml(c.id)}">
+                    <div class="correction-card-header">
+                        <div class="correction-time">${escapeHtml(c.timestamp)}</div>
+                        <button class="btn-delete" onclick="deleteCorrection('${escapeHtml(c.id)}')" title="删除此纠错">
+                            🗑️
+                        </button>
+                    </div>
+                    <div class="correction-pair">
+                        <div class="correction-item">
+                            <div class="correction-label">原始识别</div>
+                            <div class="correction-text original">${escapeHtml(c.original_text)}</div>
+                        </div>
+                        <div class="correction-arrow">→</div>
+                        <div class="correction-item">
+                            <div class="correction-label">纠错结果</div>
+                            <div class="correction-text correct">${escapeHtml(c.correct_text)}</div>
+                        </div>
+                    </div>
+                    <div class="correction-actions">
+                        <button class="btn btn-small btn-info" onclick="previewCorrection('${escapeHtml(c.original_text)}', '${escapeHtml(c.correct_text)}')">
+                            👁️ 预览样本
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function deleteCorrection(id) {
+            if (!confirm('确定要删除此纠错记录吗？')) return;
+
+            try {
+                const response = await fetch(`/api/corrections/${id}`, { method: 'DELETE' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('删除成功');
+                    loadCorrections();
+                } else {
+                    showToast(data.message || '删除失败', 'error');
+                }
+            } catch (error) {
+                console.error('删除失败:', error);
+                showToast('删除失败，请重试', 'error');
+            }
+        }
+
+        async function previewCorrection(originalText, correctText) {
+            try {
+                const response = await fetch('/api/generate_correction_preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        original_text: originalText,
+                        correct_text: correctText
+                    })
+                });
+                const data = await response.json();
+
+                if (!data.success) {
+                    showToast(data.message || '预览失败', 'error');
+                    return;
+                }
+
+                const modalBody = document.getElementById('modal-body');
+                modalBody.innerHTML = `
+                    <div class="preview-section">
+                        <h4>原始 vs 纠错对比</h4>
+                        <div class="preview-compare">
+                            <div class="preview-item">
+                                <div class="preview-label">原始 (${escapeHtml(data.original.text)})</div>
+                                <img src="data:image/png;base64,${hexToBase64(data.original.image_data)}" alt="original">
+                            </div>
+                            <div class="preview-arrow">→</div>
+                            <div class="preview-item correct">
+                                <div class="preview-label">纠错 (${escapeHtml(data.correction.text)})</div>
+                                <img src="data:image/png;base64,${hexToBase64(data.correction.image_data)}" alt="correction">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="preview-section">
+                        <h4>基于纠错数据的变异样本 (困难模式)</h4>
+                        <div class="preview-mutations">
+                            ${data.mutations.map(m => `
+                                <div class="mutation-preview">
+                                    <img src="data:image/png;base64,${hexToBase64(m.image_data)}" alt="${escapeHtml(m.text)}">
+                                    <code class="sample-text">${escapeHtml(m.text)}</code>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                showModal();
+            } catch (error) {
+                console.error('预览失败:', error);
+                showToast('预览失败，请重试', 'error');
+            }
+        }
+
+        async function batchGenerateMutations() {
+            const count = parseInt(document.getElementById('batch-count').value) || 8;
+
+            try {
+                const response = await fetch('/api/generate_from_corrections', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ count })
+                });
+                const data = await response.json();
+
+                if (!data.success) {
+                    showToast(data.message || '生成失败', 'error');
+                    return;
+                }
+
+                generatedCount += data.samples.length;
+                document.getElementById('generated-count').textContent = generatedCount;
+
+                const container = document.getElementById('batch-samples-container');
+                const samplesHtml = data.samples.map(s => `
+                    <div class="sample-card">
+                        <img src="data:image/png;base64,${hexToBase64(s.image_data)}" alt="${escapeHtml(s.text)}">
+                        <code class="sample-text">${escapeHtml(s.text)}</code>
+                    </div>
+                `).join('');
+
+                if (container.querySelector('.empty-text')) {
+                    container.innerHTML = `
+                        <p class="mutation-info">基于 ${data.corpus_size} 条纠错数据生成了 ${data.samples.length} 个变异样本：</p>
+                        <div class="samples-grid">${samplesHtml}</div>
+                    `;
+                } else {
+                    const grid = container.querySelector('.samples-grid');
+                    if (grid) {
+                        grid.innerHTML = samplesHtml + grid.innerHTML;
+                    }
+                    const info = container.querySelector('.mutation-info');
+                    if (info) {
+                        info.textContent = `共生成 ${generatedCount} 个变异样本，基于 ${data.corpus_size} 条纠错数据`;
+                    }
+                }
+
+                document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
+                document.getElementById('batch-samples').classList.add('active');
+                currentTab = 'batch-samples';
+
+                showToast(`成功生成 ${data.samples.length} 个变异样本`);
+            } catch (error) {
+                console.error('生成失败:', error);
+                showToast('生成失败，请重试', 'error');
+            }
+        }
+
+        function showModal() {
+            document.getElementById('preview-modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('preview-modal').classList.add('hidden');
+        }
+
+        document.getElementById('preview-modal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+
+        loadCorrections();
+        setInterval(loadCorrections, 15000);
+    </script>
+</body>
+</html>

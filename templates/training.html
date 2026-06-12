@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>训练模拟区 - 验证码识别平台</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container admin-container">
+        <header class="admin-header">
+            <div class="header-left">
+                <h1>🎯 训练模拟区</h1>
+                <p class="subtitle">智能难度建议、批量标注练习、准确率趋势分析</p>
+            </div>
+            <div class="header-links">
+                <a href="{{ url_for('index') }}" class="back-link">← 返回主页</a>
+                <a href="{{ url_for('admin_panel') }}" class="back-link">📊 管理面板</a>
+                <a href="{{ url_for('samples_page') }}" class="back-link">📚 样本库</a>
+            </div>
+        </header>
+
+        <div class="suggestion-card" id="suggestion-card">
+            <div class="suggestion-loading">加载训练建议中...</div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">📝</div>
+                <div class="stat-info">
+                    <div class="stat-value" id="total-submissions">0</div>
+                    <div class="stat-label">总提交次数</div>
+                </div>
+            </div>
+            <div class="stat-card primary">
+                <div class="stat-icon">🎯</div>
+                <div class="stat-info">
+                    <div class="stat-value"><span id="accuracy">0</span>%</div>
+                    <div class="stat-label">整体准确率</div>
+                </div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-icon">🏷️</div>
+                <div class="stat-info">
+                    <div class="stat-value" id="total-annotations">0</div>
+                    <div class="stat-label">已标注样本</div>
+                </div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-icon">✅</div>
+                <div class="stat-info">
+                    <div class="stat-value"><span id="annotation-accuracy">0</span>%</div>
+                    <div class="stat-label">标注准确率</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('annotation-workspace')">标注练习</button>
+            <button class="tab-btn" onclick="switchTab('accuracy-trend')">准确率趋势</button>
+            <button class="tab-btn" onclick="switchTab('annotation-history')">标注历史</button>
+        </div>
+
+        <div id="annotation-workspace" class="tab-content active">
+            <div class="admin-actions">
+                <div class="difficulty-control">
+                    <label>难度：</label>
+                    <select id="training-difficulty" onchange="refreshSamples()">
+                        <option value="auto">自动推荐</option>
+                        <option value="normal">普通模式</option>
+                        <option value="hard">困难模式</option>
+                    </select>
+                </div>
+                <div class="mutation-control">
+                    <label>样本数：</label>
+                    <select id="sample-count" onchange="refreshSamples()">
+                        <option value="4">4个</option>
+                        <option value="6" selected>6个</option>
+                        <option value="9">9个</option>
+                        <option value="12">12个</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="refreshSamples()">🔄 换一批</button>
+                <button class="btn btn-success" onclick="submitAllAnnotations()">📝 提交全部标注</button>
+            </div>
+            <div id="samples-container" class="annotation-grid">
+                <p class="empty-text">正在加载样本...</p>
+            </div>
+        </div>
+
+        <div id="accuracy-trend" class="tab-content">
+            <div class="trend-section">
+                <h3>📈 识别准确率变化趋势</h3>
+                <div id="trend-chart" class="trend-chart">
+                    <p class="empty-text">暂无足够数据展示趋势（需要至少5条记录）</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="annotation-history" class="tab-content">
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>时间</th>
+                            <th>验证码</th>
+                            <th>标注结果</th>
+                            <th>是否正确</th>
+                            <th>来源</th>
+                        </tr>
+                    </thead>
+                    <tbody id="annotation-body">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentTab = 'annotation-workspace';
+        let currentSamples = [];
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function switchTab(tabName) {
+            currentTab = tabName;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+            
+            if (tabName === 'accuracy-trend') {
+                renderTrend();
+            } else if (tabName === 'annotation-history') {
+                loadAnnotationHistory();
+            }
+        }
+
+        function hexToBase64(hexStr) {
+            const bytes = new Uint8Array(hexStr.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+            let binary = '';
+            bytes.forEach(b => binary += String.fromCharCode(b));
+            return btoa(binary);
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.classList.add('show'), 10);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }
+
+        async function loadSuggestion() {
+            try {
+                const response = await fetch('/api/training/suggestion');
+                const data = await response.json();
+                const s = data.suggestion;
+
+                const diffLabels = { 'normal': '普通模式', 'hard': '困难模式' };
+                const card = document.getElementById('suggestion-card');
+                
+                card.innerHTML = `
+                    <div class="suggestion-header">
+                        <div class="suggestion-icon">🤖</div>
+                        <div class="suggestion-title">AI 训练建议</div>
+                    </div>
+                    <div class="suggestion-body">
+                        <div class="suggestion-main">
+                            <span class="suggestion-label">推荐难度：</span>
+                            <span class="suggestion-diff">${diffLabels[s.recommended_difficulty] || s.recommended_difficulty}</span>
+                        </div>
+                        <div class="suggestion-reason">📊 ${escapeHtml(s.reason)}</div>
+                        <div class="suggestion-metrics">
+                            <span class="metric">当前准确率：<strong>${s.accuracy}%</strong></span>
+                            <span class="metric">样本总量：<strong>${s.total_submissions}</strong></span>
+                        </div>
+                        <div class="suggestion-steps">
+                            <div class="steps-title">📝 下一步建议：</div>
+                            <ul>
+                                ${s.next_steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}
+                            </ul>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('加载建议失败:', error);
+            }
+        }
+
+        async function refreshSamples() {
+            const difficulty = document.getElementById('training-difficulty').value;
+            const count = parseInt(document.getElementById('sample-count').value) || 6;
+
+            try {
+                const response = await fetch(`/api/training/samples?count=${count}&difficulty=${difficulty}`);
+                const data = await response.json();
+                
+                if (!data.success) {
+                    showToast(data.message || '加载失败', 'error');
+                    return;
+                }
+
+                currentSamples = data.samples;
+                renderAnnotationSamples();
+            } catch (error) {
+                console.error('加载样本失败:', error);
+                showToast('加载样本失败', 'error');
+            }
+        }
+
+        function renderAnnotationSamples() {
+            const container = document.getElementById('samples-container');
+            
+            if (currentSamples.length === 0) {
+                container.innerHTML = '<p class="empty-text">暂无样本，点击"换一批"获取新样本</p>';
+                return;
+            }
+
+            container.innerHTML = currentSamples.map(s => `
+                <div class="annotation-card" data-id="${escapeHtml(s.id)}" data-text="${escapeHtml(s.captcha_text)}">
+                    <div class="annotation-img-wrap">
+                        <img src="data:image/png;base64,${hexToBase64(s.image_data)}" alt="captcha">
+                    </div>
+                    <div class="annotation-input-wrap">
+                        <input type="text" 
+                               class="annotation-input" 
+                               placeholder="输入识别结果"
+                               data-id="${escapeHtml(s.id)}"
+                               maxlength="8"
+                               autocomplete="off">
+                    </div>
+                    <div class="annotation-status" id="status-${escapeHtml(s.id)}"></div>
+                </div>
+            `).join('');
+
+            document.querySelectorAll('.annotation-input').forEach(input => {
+                input.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        const id = this.getAttribute('data-id');
+                        submitSingleAnnotation(id, this);
+                    }
+                });
+            });
+        }
+
+        async function submitSingleAnnotation(id, inputEl) {
+            const label = inputEl.value.trim();
+            if (!label) return;
+
+            const sample = currentSamples.find(s => s.id === id);
+            if (!sample) return;
+
+            try {
+                const response = await fetch('/api/annotations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        captcha_text: sample.captcha_text,
+                        label: label,
+                        source: 'training'
+                    })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    const statusEl = document.getElementById(`status-${id}`);
+                    const isCorrect = data.record.is_correct;
+                    
+                    if (isCorrect) {
+                        statusEl.innerHTML = '<span class="badge badge-success">✓ 正确</span>';
+                        inputEl.classList.add('input-correct');
+                    } else {
+                        statusEl.innerHTML = `<span class="badge badge-danger">✗ 正确: ${escapeHtml(sample.captcha_text)}</span>`;
+                        inputEl.classList.add('input-wrong');
+                    }
+                    inputEl.disabled = true;
+                    
+                    loadStats();
+                    loadSuggestion();
+                } else {
+                    showToast(data.message || '提交失败', 'error');
+                }
+            } catch (error) {
+                console.error('提交失败:', error);
+                showToast('提交失败', 'error');
+            }
+        }
+
+        async function submitAllAnnotations() {
+            const inputs = document.querySelectorAll('.annotation-input:not([disabled])');
+            let submitted = 0;
+            let correct = 0;
+
+            for (const input of inputs) {
+                const label = input.value.trim();
+                if (!label) continue;
+                
+                const id = input.getAttribute('data-id');
+                const sample = currentSamples.find(s => s.id === id);
+                if (!sample) continue;
+
+                try {
+                    const response = await fetch('/api/annotations', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            captcha_text: sample.captcha_text,
+                            label: label,
+                            source: 'training'
+                        })
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        submitted++;
+                        if (data.record.is_correct) correct++;
+                        
+                        const statusEl = document.getElementById(`status-${id}`);
+                        if (data.record.is_correct) {
+                            statusEl.innerHTML = '<span class="badge badge-success">✓ 正确</span>';
+                            input.classList.add('input-correct');
+                        } else {
+                            statusEl.innerHTML = `<span class="badge badge-danger">✗ 正确: ${escapeHtml(sample.captcha_text)}</span>`;
+                            input.classList.add('input-wrong');
+                        }
+                        input.disabled = true;
+                    }
+                } catch (e) {
+                    console.error(e);
+                }
+            }
+
+            if (submitted > 0) {
+                showToast(`已提交 ${submitted} 个标注，正确 ${correct} 个`);
+                loadStats();
+                loadSuggestion();
+            } else {
+                showToast('请先输入标注内容', 'error');
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+                const s = data.summary;
+
+                document.getElementById('total-submissions').textContent = s.total_submissions;
+                document.getElementById('accuracy').textContent = s.accuracy;
+                document.getElementById('total-annotations').textContent = s.total_annotations;
+                document.getElementById('annotation-accuracy').textContent = s.annotation_accuracy;
+            } catch (error) {
+                console.error('加载统计失败:', error);
+            }
+        }
+
+        async function renderTrend() {
+            try {
+                const response = await fetch('/api/training/suggestion');
+                const data = await response.json();
+                const trend = data.suggestion.trend;
+                const container = document.getElementById('trend-chart');
+
+                if (!trend || trend.length < 2) {
+                    container.innerHTML = '<p class="empty-text">暂无足够数据展示趋势（需要至少5条记录）。继续在主页或标注练习中积累样本。</p>';
+                    return;
+                }
+
+                const maxVal = 100;
+                const bars = trend.map((t, i) => {
+                    const height = (t.accuracy / maxVal) * 100;
+                    const color = t.accuracy >= 70 ? 'bg-success' : t.accuracy >= 40 ? 'bg-warning' : 'bg-danger';
+                    return `
+                        <div class="trend-bar-col">
+                            <div class="trend-bar" style="height: ${height}%">
+                                <div class="trend-bar-fill ${color}"></div>
+                                <span class="trend-bar-label">${t.accuracy}%</span>
+                            </div>
+                            <div class="trend-bar-xlabel">${escapeHtml(t.label)}</div>
+                        </div>
+                    `;
+                }).join('');
+
+                container.innerHTML = `
+                    <div class="trend-chart-container">
+                        <div class="trend-y-axis">
+                            <span>100%</span>
+                            <span>75%</span>
+                            <span>50%</span>
+                            <span>25%</span>
+                            <span>0%</span>
+                        </div>
+                        <div class="trend-bars">
+                            ${bars}
+                        </div>
+                    </div>
+                    <div class="trend-legend">
+                        <div class="legend-item"><span class="legend-dot bg-success"></span>高准确率 (≥70%)</div>
+                        <div class="legend-item"><span class="legend-dot bg-warning"></span>中等准确率 (40-70%)</div>
+                        <div class="legend-item"><span class="legend-dot bg-danger"></span>低准确率 (≤40%)</div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('加载趋势失败:', error);
+            }
+        }
+
+        async function loadAnnotationHistory() {
+            try {
+                const response = await fetch('/api/annotations?limit=100');
+                const data = await response.json();
+                const tbody = document.getElementById('annotation-body');
+
+                if (!data.annotations || data.annotations.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="empty-text">暂无标注记录。在上方"标注练习"中开始标注吧。</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = data.annotations.map(a => `
+                    <tr>
+                        <td>${escapeHtml(a.timestamp)}</td>
+                        <td><code class="captcha-code">${escapeHtml(a.captcha_text)}</code></td>
+                        <td><code class="${a.is_correct ? 'correct' : 'wrong'}">${escapeHtml(a.label)}</code></td>
+                        <td>
+                            <span class="badge ${a.is_correct ? 'badge-success' : 'badge-danger'}">
+                                ${a.is_correct ? '✓ 正确' : '✗ 错误'}
+                            </span>
+                        </td>
+                        <td class="muted">${escapeHtml(a.source || '-')}</td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('加载标注历史失败:', error);
+            }
+        }
+
+        loadStats();
+        loadSuggestion();
+        refreshSamples();
+        setInterval(() => {
+            loadStats();
+            loadSuggestion();
+        }, 20000);
+    </script>
+</body>
+</html>
