@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>验证码识别演示平台</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>验证码识别演示平台</h1>
+            <p class="subtitle">输入图片中的字符，体验验证码识别过程</p>
+        </header>
+
+        <div class="main-card">
+            <div class="difficulty-selector">
+                <label>难度选择：</label>
+                <select id="difficulty" onchange="refreshCaptcha()">
+                    <option value="normal">普通模式</option>
+                    <option value="hard">困难模式</option>
+                </select>
+            </div>
+
+            <div class="captcha-container">
+                <img id="captcha-image" src="{{ url_for('get_captcha_image') }}" alt="验证码" onclick="refreshCaptcha()" title="点击刷新">
+                <button class="refresh-btn" onclick="refreshCaptcha()" title="刷新验证码">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                    </svg>
+                    刷新
+                </button>
+            </div>
+
+            <form id="captcha-form" onsubmit="submitCaptcha(event)">
+                <div class="input-group">
+                    <input type="text" id="captcha-input" name="captcha" placeholder="请输入验证码" autocomplete="off" maxlength="6">
+                    <button type="submit" class="submit-btn">提交验证</button>
+                </div>
+            </form>
+
+            <div id="result-message" class="result-message"></div>
+
+            <div id="correction-form" class="correction-form hidden">
+                <div class="correction-header">
+                    <span class="correction-icon">💡</span>
+                    <span>识别错误？请提交正确答案帮助我们改进：</span>
+                </div>
+                <div class="correction-info">
+                    <div class="info-row">
+                        <span class="label">你的答案：</span>
+                        <span id="user-answer" class="user-answer"></span>
+                    </div>
+                </div>
+                <form onsubmit="submitCorrection(event)">
+                    <div class="input-group">
+                        <input type="hidden" id="original-text">
+                        <input type="text" id="correct-text" placeholder="请输入正确的验证码" autocomplete="off" maxlength="6" required>
+                        <button type="submit" class="correct-btn">提交纠错</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="links">
+            <a href="{{ url_for('admin_panel') }}" class="admin-link">📊 管理面板</a>
+        </div>
+
+        <div class="api-info">
+            <h3>API 接口说明</h3>
+            <div class="endpoint">
+                <span class="method">GET</span>
+                <code>/api/captcha?difficulty=normal</code>
+                <span class="desc">获取验证码图片和session_id</span>
+            </div>
+            <div class="endpoint">
+                <span class="method">POST</span>
+                <code>/api/captcha/{session_id}/verify</code>
+                <span class="desc">提交验证码验证结果</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let lastOriginalText = '';
+        let lastUserAnswer = '';
+
+        function refreshCaptcha() {
+            const difficulty = document.getElementById('difficulty').value;
+            const img = document.getElementById('captcha-image');
+            img.src = `/captcha/image?difficulty=${difficulty}&t=${Date.now()}`;
+            
+            document.getElementById('captcha-input').value = '';
+            document.getElementById('result-message').textContent = '';
+            document.getElementById('result-message').className = 'result-message';
+            document.getElementById('correction-form').classList.add('hidden');
+        }
+
+        async function submitCaptcha(event) {
+            event.preventDefault();
+            const captcha = document.getElementById('captcha-input').value.trim();
+            
+            if (!captcha) {
+                showMessage('请输入验证码', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/captcha/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ captcha })
+                });
+                const data = await response.json();
+
+                lastUserAnswer = captcha;
+
+                if (data.is_correct) {
+                    showMessage('✅ ' + data.message, 'success');
+                    document.getElementById('correction-form').classList.add('hidden');
+                    setTimeout(refreshCaptcha, 1500);
+                } else {
+                    showMessage('❌ ' + data.message, 'error');
+                    lastOriginalText = data.correct_text;
+                    showCorrectionForm(captcha, data.correct_text);
+                }
+            } catch (error) {
+                showMessage('网络错误，请重试', 'error');
+            }
+        }
+
+        function showCorrectionForm(userAnswer, correctText) {
+            document.getElementById('user-answer').textContent = userAnswer.toUpperCase();
+            document.getElementById('original-text').value = correctText;
+            document.getElementById('correct-text').value = '';
+            document.getElementById('correction-form').classList.remove('hidden');
+        }
+
+        async function submitCorrection(event) {
+            event.preventDefault();
+            const correctText = document.getElementById('correct-text').value.trim();
+            
+            if (!correctText) {
+                showMessage('请输入正确的验证码', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/captcha/correct', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        original_text: lastOriginalText,
+                        correct_text: correctText
+                    })
+                });
+                const data = await response.json();
+                
+                showMessage('🙏 ' + data.message, 'success');
+                document.getElementById('correction-form').classList.add('hidden');
+                setTimeout(refreshCaptcha, 1500);
+            } catch (error) {
+                showMessage('提交失败，请重试', 'error');
+            }
+        }
+
+        function showMessage(text, type) {
+            const msg = document.getElementById('result-message');
+            msg.textContent = text;
+            msg.className = `result-message ${type}`;
+        }
+
+        document.getElementById('captcha-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                submitCaptcha(e);
+            }
+        });
+    </script>
+</body>
+</html>

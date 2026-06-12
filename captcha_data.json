@@ -1,0 +1,41 @@
+{
+  "submissions": [
+    {
+      "id": "c108fe55",
+      "timestamp": "2026-06-12 20:08:48",
+      "captcha_text": "4FRQ",
+      "user_input": "WRONG",
+      "is_correct": false,
+      "ip": "127.0.0.1"
+    },
+    {
+      "id": "2cba45dc",
+      "timestamp": "2026-06-12 20:07:48",
+      "captcha_text": "GSG9",
+      "user_input": "GSG9",
+      "is_correct": true,
+      "ip": "127.0.0.1"
+    }
+  ],
+  "corrections": [
+    {
+      "id": "ef175a72",
+      "timestamp": "2026-06-12 20:08:48",
+      "original_text": "4FRQ",
+      "correct_text": "4FRQ",
+      "ip": "127.0.0.1"
+    }
+  ],
+  "captcha_stats": {
+    "GSG9": {
+      "correct": 1,
+      "wrong": 0,
+      "total": 1
+    },
+    "4FRQ": {
+      "correct": 0,
+      "wrong": 1,
+      "total": 1
+    }
+  }
+}
